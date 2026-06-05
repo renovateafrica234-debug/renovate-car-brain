@@ -1,0 +1,30 @@
+{
+  "$schema": "https://railway.app/railway.schema.json",
+  "build": {
+    "builder": "NIXPACKS",
+    "buildCommand": "npm run build --filter=brain-api...",
+    "nixpacksPlan": {
+      "providers": ["node"],
+      "phases": {
+        "setup": {
+          "nixPkgs": ["nodejs_20", "npm-9_x"]
+        },
+        "build": {
+          "cmds": [
+            "npm ci",
+            "npm run build --filter=brain-api..."
+          ]
+        }
+      }
+    }
+  },
+  "deploy": {
+    "startCommand": "npm run start --filter=brain-api",
+    "healthcheckPath": "/health",
+    "healthcheckTimeout": 45,
+    "healthcheckInterval": 15,
+    "restartPolicyType": "ON_FAILURE",
+    "restartPolicyMaxRetries": 5,
+    "numReplicas": 1
+  }
+}

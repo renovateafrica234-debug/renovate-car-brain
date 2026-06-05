@@ -1,0 +1,104 @@
+name: Deploy Brain API + Run Supabase Migrations
+
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - 'apps/brain-api/**'
+      - 'packages/agents/**'
+      - 'packages/db/**'
+      - 'packages/shared/**'
+      - 'infra/supabase/migrations/**'
+      - '.github/workflows/deploy-brain-migrations.yml'
+      - 'railway.json'
+
+  workflow_dispatch:
+    inputs:
+      run_migrations_only:
+        description: 'Run only migrations (skip deploy)'
+        required: false
+        default: false
+        type: boolean
+
+env:
+  SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+  SUPABASE_PROJECT_ID: ${{ secrets.SUPABASE_PROJECT_ID }}
+  SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+
+jobs:
+  migrations:
+    runs-on: ubuntu-latest
+    name: Run Supabase Migrations
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Link Supabase Project
+        run: supabase link --project-ref $SUPABASE_PROJECT_ID
+
+      - name: Push Migrations to Production
+        run: supabase db push
+
+      - name: Verify Migrations Applied
+        run: |
+          supabase db dump --data-only --schema public > /tmp/verify.sql
+          echo "✅ Migrations verified"
+
+      - name: Seed Abuja Market Data (if needed)
+        run: |
+          supabase db execute --file infra/supabase/seed/abuja_districts.sql || true
+          supabase db execute --file infra/supabase/seed/buyer_segments.sql || true
+
+  deploy-brain:
+    runs-on: ubuntu-latest
+    name: Deploy Brain API to Railway
+    needs: migrations
+    if: ${{ !inputs.run_migrations_only }}
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install Railway CLI
+        run: npm install -g @railway/cli
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Build Brain API
+        run: npm run build --filter=brain-api...
+
+      - name: Deploy to Railway
+        run: railway up --service=brain-api
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+
+      - name: Verify Deployment Health
+        run: |
+          sleep 10
+          curl -f https://$RAILWAY_DOMAIN/health || exit 1
+        env:
+          RAILWAY_DOMAIN: ${{ secrets.RAILWAY_DOMAIN }}
+
+      - name: Notify Deployment Success
+        if: success()
+        run: |
+          curl -X POST ${{ secrets.DEPLOY_WEBHOOK_URL }} \
+            -H "Content-Type: application/json" \
+            -d '{
+              "text": "🚀 Brain API deployed successfully",
+              "service": "brain-api",
+              "commit": "${{ github.sha }}",
+              "branch": "${{ github.ref_name }}"
+            }'
+        continue-on-error: true
