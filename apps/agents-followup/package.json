@@ -1,0 +1,19 @@
+{
+  "name": "@renovate-car/agents-followup",
+  "version": "0.0.1",
+  "private": true,
+  "scripts": {
+    "build": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@renovate-car/types": "^0.0.1",
+    "@renovate-car/utils": "^0.0.1",
+    "bullmq": "^5.78.0",
+    "dotenv": "^16.4.0",
+    "ioredis": "^5.3.2"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "typescript": "^5.6.0"
+  }
+}
